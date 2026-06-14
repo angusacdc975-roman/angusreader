@@ -1,14 +1,26 @@
 const router = require('express').Router();
 const multer = require('multer');
-const path = require('path');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('cloudinary').v2;
 const Comic = require('../models/Comic');
 const { auth, adminOnly } = require('../middleware/auth');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+// Налаштування доступу до твоєї хмари
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+
+// Вказуємо multer зберігати файли прямо в Cloudinary
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'angusreader_covers', // Так буде називатися папка в хмарі
+    allowedFormats: ['jpeg', 'png', 'jpg', 'webp'],
+  },
+});
+const upload = multer({ storage: storage });
 
 // GET all comics with search/filter/sort/paginate
 router.get('/', async (req, res) => {
@@ -96,9 +108,10 @@ router.get('/:id/chapter/:chapterNum', async (req, res) => {
 });
 
 // POST create comic (admin)
-router.post('/', auth, adminOnly, async (req, res) => {
+router.post('/', auth, adminOnly, upload.single('cover'), async (req, res) => {
   try {
     const data = { ...req.body };
+    if (req.file) data.cover = req.file.path; // Отримуємо готове посилання від Cloudinary
     if (data.genres && typeof data.genres === 'string') data.genres = JSON.parse(data.genres);
     data.createdBy = req.user._id;
     const comic = await Comic.create(data);
@@ -109,9 +122,10 @@ router.post('/', auth, adminOnly, async (req, res) => {
 });
 
 // PUT update comic (admin)
-router.put('/:id', auth, adminOnly, async (req, res) => {
+router.put('/:id', auth, adminOnly, upload.single('cover'), async (req, res) => {
   try {
     const data = { ...req.body };
+    if (req.file) data.cover = req.file.path; // Отримуємо готове посилання від Cloudinary
     if (data.genres && typeof data.genres === 'string') data.genres = JSON.parse(data.genres);
     const comic = await Comic.findByIdAndUpdate(req.params.id, data, { new: true });
     if (!comic) return res.status(404).json({ message: 'Comic not found' });
@@ -120,7 +134,6 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-
 // DELETE comic (admin)
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   try {
