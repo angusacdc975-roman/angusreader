@@ -40,8 +40,8 @@ export default function ComicModal({ comic, onClose, onSaved }) {
 
      
 
-      if (comic) await api.put(`/comics/${comic._id}`, fd, config);
-      else await api.post('/comics', fd, config);
+      if (comic) await api.put(`/comics/${comic._id}`, fd, );
+      else await api.post('/comics', fd, );
       
       addToast(comic ? 'Комікс оновлено!' : 'Комікс створено!');
       onSaved();
