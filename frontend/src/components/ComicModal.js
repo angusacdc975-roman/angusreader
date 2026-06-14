@@ -46,6 +46,7 @@ export default function ComicModal({ comic, onClose, onSaved }) {
       addToast(comic ? 'Комікс оновлено!' : 'Комікс створено!');
       onSaved();
     } catch (err) {
+      console.error("ДЕТАЛІ ПОМИЛКИ:", err); //
       addToast(err.response?.data?.message || 'Помилка', 'error');
     } finally { setLoading(false); }
   };
