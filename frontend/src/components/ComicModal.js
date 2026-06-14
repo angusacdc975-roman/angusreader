@@ -38,8 +38,7 @@ export default function ComicModal({ comic, onClose, onSaved }) {
       });
       if (coverFile) fd.append('cover', coverFile);
 
-      // Вказуємо правильні заголовки для файлів
-      const config = { headers: { 'Content-Type': 'multipart/form-data' } };
+     
 
       if (comic) await api.put(`/comics/${comic._id}`, fd, config);
       else await api.post('/comics', fd, config);
