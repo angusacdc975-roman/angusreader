@@ -122,17 +122,20 @@ router.post('/', auth, adminOnly, upload.single('cover'), async (req, res) => {
 });
 
 // PUT update comic (admin)
-router.put('/:id', auth, adminOnly, upload.single('cover'), async (req, res) => {
+router.put('/:id', auth, adminOnly, (req, res, next) => {
+  // Запускаємо завантаження файлу і ловимо помилку на місці
+  upload.single('cover')(req, res, (err) => {
+    if (err) {
+      // Перетворюємо об'єкт помилки на читабельний текст
+      console.error("ДЕТАЛІ ПОМИЛКИ CLOUDINARY:", JSON.stringify(err, null, 2));
+      return res.status(500).json({ message: "Помилка Cloudinary: " + (err.message || 'Невідома помилка') });
+    }
+    next(); // Якщо все ок, йдемо далі
+  });
+}, async (req, res) => {
   try {
     const data = { ...req.body };
-    
-    // ДОДАЄМО ЛОГУВАННЯ: подивимось, що саме прилітає у req.file
-    console.log("ДАНІ ФАЙЛУ ВІД CLOUDINARY:", req.file); 
-    
-    if (req.file) {
-      // Якщо шлях є, зберігаємо його
-      data.cover = req.file.path; 
-    }
+    if (req.file) data.cover = req.file.path; 
     
     if (data.genres && typeof data.genres === 'string') {
       data.genres = JSON.parse(data.genres);
@@ -143,21 +146,10 @@ router.put('/:id', auth, adminOnly, upload.single('cover'), async (req, res) => 
     
     res.json(comic);
   } catch (err) {
-    // ДОДАЄМО ЛОГУВАННЯ ПОМИЛКИ: сервер Render точно запише це в логи
-    console.error("ПОМИЛКА ПРИ ОНОВЛЕННІ КОМІКСУ:", err);
+    console.error("ПОМИЛКА БАЗИ ДАНИХ:", err);
     res.status(500).json({ message: err.message });
   }
 });
-// DELETE comic (admin)
-router.delete('/:id', auth, adminOnly, async (req, res) => {
-  try {
-    await Comic.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted successfully' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
 // POST add chapter (admin)
 router.post('/:id/chapters', auth, adminOnly, upload.array('pages', 200), async (req, res) => {
   try {
