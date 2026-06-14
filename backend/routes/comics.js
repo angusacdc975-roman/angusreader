@@ -125,12 +125,26 @@ router.post('/', auth, adminOnly, upload.single('cover'), async (req, res) => {
 router.put('/:id', auth, adminOnly, upload.single('cover'), async (req, res) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.cover = req.file.path; // Отримуємо готове посилання від Cloudinary
-    if (data.genres && typeof data.genres === 'string') data.genres = JSON.parse(data.genres);
+    
+    // ДОДАЄМО ЛОГУВАННЯ: подивимось, що саме прилітає у req.file
+    console.log("ДАНІ ФАЙЛУ ВІД CLOUDINARY:", req.file); 
+    
+    if (req.file) {
+      // Якщо шлях є, зберігаємо його
+      data.cover = req.file.path; 
+    }
+    
+    if (data.genres && typeof data.genres === 'string') {
+      data.genres = JSON.parse(data.genres);
+    }
+    
     const comic = await Comic.findByIdAndUpdate(req.params.id, data, { new: true });
     if (!comic) return res.status(404).json({ message: 'Comic not found' });
+    
     res.json(comic);
   } catch (err) {
+    // ДОДАЄМО ЛОГУВАННЯ ПОМИЛКИ: сервер Render точно запише це в логи
+    console.error("ПОМИЛКА ПРИ ОНОВЛЕННІ КОМІКСУ:", err);
     res.status(500).json({ message: err.message });
   }
 });
