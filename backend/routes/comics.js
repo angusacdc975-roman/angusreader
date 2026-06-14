@@ -96,10 +96,9 @@ router.get('/:id/chapter/:chapterNum', async (req, res) => {
 });
 
 // POST create comic (admin)
-router.post('/', auth, adminOnly, upload.single('cover'), async (req, res) => {
+router.post('/', auth, adminOnly, async (req, res) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.cover = `/uploads/${req.file.filename}`;
     if (data.genres && typeof data.genres === 'string') data.genres = JSON.parse(data.genres);
     data.createdBy = req.user._id;
     const comic = await Comic.create(data);
@@ -110,10 +109,9 @@ router.post('/', auth, adminOnly, upload.single('cover'), async (req, res) => {
 });
 
 // PUT update comic (admin)
-router.put('/:id', auth, adminOnly, upload.single('cover'), async (req, res) => {
+router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
     const data = { ...req.body };
-    if (req.file) data.cover = `/uploads/${req.file.filename}`;
     if (data.genres && typeof data.genres === 'string') data.genres = JSON.parse(data.genres);
     const comic = await Comic.findByIdAndUpdate(req.params.id, data, { new: true });
     if (!comic) return res.status(404).json({ message: 'Comic not found' });

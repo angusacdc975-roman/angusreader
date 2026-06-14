@@ -6,15 +6,28 @@ const GENRES = ['Бойовик','Комедія','Детектив','Драма
 
 export default function ComicModal({ comic, onClose, onSaved }) {
   const { addToast } = useToast();
+  
+  // Додали cover в початковий стан форми
   const [form, setForm] = useState({
-    title: '', description: '', author: '', artist: '', genres: [], status: 'ongoing', year: new Date().getFullYear()
+    title: '', description: '', author: '', artist: '', cover: '', genres: [], status: 'ongoing', year: new Date().getFullYear()
   });
-  const [coverFile, setCoverFile] = useState(null);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
+  // Підтягуємо існуючу обкладинку при редагуванні
   useEffect(() => {
-    if (comic) setForm({ title: comic.title || '', description: comic.description || '', author: comic.author || '', artist: comic.artist || '', genres: comic.genres || [], status: comic.status || 'ongoing', year: comic.year || new Date().getFullYear() });
+    if (comic) {
+      setForm({ 
+        title: comic.title || '', 
+        description: comic.description || '', 
+        author: comic.author || '', 
+        artist: comic.artist || '', 
+        cover: comic.cover || '', 
+        genres: comic.genres || [], 
+        status: comic.status || 'ongoing', 
+        year: comic.year || new Date().getFullYear() 
+      });
+    }
   }, [comic]);
 
   const validate = () => {
@@ -30,19 +43,22 @@ export default function ComicModal({ comic, onClose, onSaved }) {
     if (!validate()) return;
     setLoading(true);
     try {
-      const fd = new FormData();
-      Object.entries(form).forEach(([k, v]) => {
-        if (k === 'genres') fd.append(k, JSON.stringify(v));
-        else fd.append(k, v);
-      });
-      if (coverFile) fd.append('cover', coverFile);
-      if (comic) await api.put(`/comics/${comic._id}`, fd);
-      else await api.post('/comics', fd);
+      // Відправляємо звичайний об'єкт, без FormData
+      const data = { ...form };
+      
+      if (comic) {
+        await api.put(`/comics/${comic._id}`, data);
+      } else {
+        await api.post('/comics', data);
+      }
+      
       addToast(comic ? 'Комікс оновлено!' : 'Комікс створено!');
       onSaved();
     } catch (err) {
       addToast(err.response?.data?.message || 'Помилка', 'error');
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const toggleGenre = (g) => setForm(f => ({
@@ -59,10 +75,12 @@ export default function ComicModal({ comic, onClose, onSaved }) {
           <input className={`form-input ${errors.title ? 'border-red' : ''}`} value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Назва коміксу" />
           {errors.title && <div className="form-error">{errors.title}</div>}
         </div>
+        
         <div className="form-group">
           <label className="form-label">Опис</label>
           <textarea className="form-textarea" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Короткий опис..." />
         </div>
+        
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div className="form-group">
             <label className="form-label">Автор</label>
@@ -86,6 +104,7 @@ export default function ComicModal({ comic, onClose, onSaved }) {
             </select>
           </div>
         </div>
+
         <div className="form-group">
           <label className="form-label">Жанри</label>
           <div className="filter-genres">
@@ -94,9 +113,17 @@ export default function ComicModal({ comic, onClose, onSaved }) {
             ))}
           </div>
         </div>
+
+        {/* Виправлене поле обкладинки: тепер воно коректно працює зі станом form */}
         <div className="form-group">
-          <label className="form-label">Обкладинка</label>
-          <input type="file" accept="image/*" onChange={e => setCoverFile(e.target.files[0])} style={{ color: 'var(--text-secondary)', fontSize: 14 }} />
+          <label className="form-label">Обкладинка (URL-посилання)</label>
+          <input 
+            type="text" 
+            className="form-input" 
+            placeholder="https://приклад.com/картинка.jpg" 
+            value={form.cover}
+            onChange={(e) => setForm({...form, cover: e.target.value})} 
+          />
         </div>
 
         <div className="modal-actions">
