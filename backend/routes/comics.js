@@ -151,14 +151,23 @@ router.put('/:id', auth, adminOnly, (req, res, next) => {
   }
 });
 // POST add chapter (admin)
-router.post('/:id/chapters', auth, adminOnly, upload.array('pages', 200), async (req, res) => {
+router.post('/:id/chapters', auth, adminOnly, (req, res, next) => {
+  upload.array('pages', 200)(req, res, (err) => {
+    if (err) {
+      console.log("=== СУПЕР-ДЕТАЛЬНА ПОМИЛКА CLOUDINARY ===");
+      console.dir(err, { depth: null }); // Секретна зброя Node.js
+      console.log("=========================================");
+      return res.status(500).json({ message: "Помилка завантаження сторінок" });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     const comic = await Comic.findById(req.params.id);
     if (!comic) return res.status(404).json({ message: 'Comic not found' });
 
-    // Тепер Cloudinary повертає повний шлях (req.file.path)
-    // Оскільки upload.array завантажує масив файлів, вони всі будуть у req.files
-    const pages = req.files.map(f => f.path); 
+    // Якщо файли є, дістаємо їхні шляхи з хмари
+    const pages = req.files ? req.files.map(f => f.path) : [];
 
     const chapter = {
       number: Number(req.body.number),
@@ -172,8 +181,9 @@ router.post('/:id/chapters', auth, adminOnly, upload.array('pages', 200), async 
     
     res.status(201).json(comic);
   } catch (err) {
-    console.error("ПОМИЛКА ДОДАВАННЯ РОЗДІЛУ:", err);
-    res.status(500).json({ message: err.message });
+    console.log("=== СУПЕР-ДЕТАЛЬНА ПОМИЛКА БАЗИ ДАНИХ ===");
+    console.dir(err, { depth: null }); // Секретна зброя Node.js
+    res.status(500).json({ message: "Помилка бази даних або збереження" });
   }
 });
 
