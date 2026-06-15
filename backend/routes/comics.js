@@ -22,6 +22,23 @@ const storage = new CloudinaryStorage({
 });
 const upload = multer({ storage: storage });
 
+// Функція для витягування Public ID з повної адреси Cloudinary
+const getPublicIdFromUrl = (url) => {
+  try {
+    // Посилання виглядає так: .../upload/v123456/angusreader_covers/filename.jpg
+    const splits = url.split('/upload/');
+    if (splits.length < 2) return null;
+    
+    // Прибираємо префікс версії (v123456/) якщо він є, і розширення файлу (.jpg)
+    const pathAfterUpload = splits[1].replace(/^v\d+\//, ''); 
+    const publicId = pathAfterUpload.substring(0, pathAfterUpload.lastIndexOf('.'));
+    
+    return publicId; // Поверне: angusreader_covers/filename
+  } catch (err) {
+    return null;
+  }
+};
+
 // GET all comics with search/filter/sort/paginate
 router.get('/', async (req, res) => {
   try {
@@ -187,15 +204,33 @@ router.post('/:id/chapters', auth, adminOnly, (req, res, next) => {
   }
 });
 
-// DELETE chapter (admin)
-router.delete('/:id/chapters/:chapterNum', auth, adminOnly, async (req, res) => {
+// DELETE chapter (admin) - з очищенням хмари
+router.delete('/:id/chapters/:chapterId', auth, adminOnly, async (req, res) => {
   try {
     const comic = await Comic.findById(req.params.id);
     if (!comic) return res.status(404).json({ message: 'Comic not found' });
-    comic.chapters = comic.chapters.filter(c => c.number !== Number(req.params.chapterNum));
+
+    const chapter = comic.chapters.id(req.params.chapterId);
+    if (!chapter) return res.status(404).json({ message: 'Chapter not found' });
+
+    // 1. ЗБИРАЄМО PUBLIC ID ВСІХ СТОРІНОК ЦЬОГО РОЗДІЛУ
+    if (chapter.pages && chapter.pages.length > 0) {
+      const publicIds = chapter.pages.map(url => getPublicIdFromUrl(url)).filter(Boolean);
+
+      // 2. ВИДАЛЯЄМО З CLOUDINARY ЗА ОДИН ЗАПИТ
+      if (publicIds.length > 0) {
+        await cloudinary.api.delete_resources(publicIds);
+        console.log("Очищено сторінки з Cloudinary:", publicIds);
+      }
+    }
+
+    // 3. Видаляємо розділ з MongoDB
+    comic.chapters.pull(req.params.chapterId);
     await comic.save();
-    res.json({ message: 'Chapter deleted' });
+
+    res.json(comic);
   } catch (err) {
+    console.error("Помилка видалення розділу:", err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -278,6 +313,46 @@ router.delete('/:id/comments/:commentId', auth, async (req, res) => {
   } catch (err) {
     // Якщо щось піде не так, тепер ми ТОЧНО побачимо це в логах
     console.error("ПОМИЛКА ВИДАЛЕННЯ КОМЕНТАРЯ:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT edit chapter (admin)
+router.put('/:id/chapters/:chapterId', auth, adminOnly, upload.array('pages', 200), async (req, res) => {
+  try {
+    const comic = await Comic.findById(req.params.id);
+    if (!comic) return res.status(404).json({ message: 'Comic not found' });
+
+    const chapter = comic.chapters.id(req.params.chapterId);
+    if (!chapter) return res.status(404).json({ message: 'Chapter not found' });
+
+    // Оновлюємо базові текстові дані
+    if (req.body.number) chapter.number = Number(req.body.number);
+    if (req.body.title !== undefined) chapter.title = req.body.title;
+
+    // ЯКЩО АДМІН ЗАВАНТАЖИВ НОВІ ФАЙЛИ ДЛЯ СТОРІНОК:
+    if (req.files && req.files.length > 0) {
+      
+      // 1. Спочатку видаляємо старі картинки цього розділу з хмари
+      if (chapter.pages && chapter.pages.length > 0) {
+        const oldPublicIds = chapter.pages.map(url => getPublicIdFromUrl(url)).filter(Boolean);
+        if (oldPublicIds.length > 0) {
+          await cloudinary.api.delete_resources(oldPublicIds);
+          console.log("Очищено старі сторінки при редагуванні:", oldPublicIds);
+        }
+      }
+
+      // 2. Записуємо нові посилання від Cloudinary
+      chapter.pages = req.files.map(f => f.path);
+    }
+
+    // Сортуємо розділи за номером на випадок, якщо номер змінився
+    comic.chapters.sort((a, b) => a.number - b.number);
+    await comic.save();
+
+    res.json(comic);
+  } catch (err) {
+    console.error("Помилка редагування розділу:", err);
     res.status(500).json({ message: err.message });
   }
 });
