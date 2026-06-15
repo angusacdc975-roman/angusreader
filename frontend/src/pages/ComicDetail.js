@@ -86,7 +86,7 @@ export default function ComicDetail() {
           <div className="comic-detail-title">{comic.title}</div>
           <div className="comic-detail-author">
             {comic.author && <span> {comic.author}</span>}
-            {comic.artist && comic.artist !== comic.author && <span style={{ marginLeft: 12 }}>🎨 {comic.artist}</span>}
+            {comic.artist && comic.artist !== comic.author && <span style={{ marginLeft: 12 }}> {comic.artist}</span>}
           </div>
           <div style={{ marginBottom: 12, color: 'var(--text-muted)', fontSize: 14 }}>
             {STATUS_LABELS[comic.status]} {comic.year && `• ${comic.year}`}
