@@ -155,17 +155,24 @@ router.post('/:id/chapters', auth, adminOnly, upload.array('pages', 200), async 
   try {
     const comic = await Comic.findById(req.params.id);
     if (!comic) return res.status(404).json({ message: 'Comic not found' });
-    const pages = req.files.map(f => `/uploads/${f.filename}`);
+
+    // Тепер Cloudinary повертає повний шлях (req.file.path)
+    // Оскільки upload.array завантажує масив файлів, вони всі будуть у req.files
+    const pages = req.files.map(f => f.path); 
+
     const chapter = {
       number: Number(req.body.number),
       title: req.body.title || '',
       pages
     };
+
     comic.chapters.push(chapter);
     comic.chapters.sort((a, b) => a.number - b.number);
     await comic.save();
+    
     res.status(201).json(comic);
   } catch (err) {
+    console.error("ПОМИЛКА ДОДАВАННЯ РОЗДІЛУ:", err);
     res.status(500).json({ message: err.message });
   }
 });
