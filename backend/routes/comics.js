@@ -243,3 +243,31 @@ router.post('/:id/comments', auth, async (req, res) => {
 });
 
 module.exports = router;
+
+// DELETE видалення коментаря
+// Зверни увагу: ми використовуємо middleware auth, щоб знати, хто робить запит
+router.delete('/comments/:commentId', auth, async (req, res) => {
+  try {
+    // 1. Знаходимо коментар у базі
+    const comment = await Comment.findById(req.params.commentId);
+    
+    if (!comment) {
+      return res.status(404).json({ message: 'Коментар не знайдено' });
+    }
+
+    // 2. ПЕРЕВІРКА БЕЗПЕКИ: чи належить коментар цьому юзеру?
+    // req.user._id береться з твого токена (middleware auth)
+    // toString() потрібен, бо в MongoDB ID - це об'єкти, а не просто текст
+    if (comment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Ви не можете видалити чужий коментар' });
+    }
+
+    // 3. Якщо перевірка пройдена - видаляємо
+    await comment.deleteOne();
+    
+    res.json({ message: 'Коментар успішно видалено' });
+  } catch (err) {
+    console.error("ПОМИЛКА ВИДАЛЕННЯ КОМЕНТАРЯ:", err);
+    res.status(500).json({ message: err.message });
+  }
+});

@@ -16,7 +16,7 @@ const Comments = ({ comicId, initialComments = [] }) => {
 
     try {
       // Ваш файл api вже автоматично додає токен, тому нам не потрібно писати headers!
-     const { data } = await api.post(`/comics/${comicId}/comments`, { 
+      const { data } = await api.post(`/comics/${comicId}/comments`, { 
         text: text, 
         username: user.name || user.username || 'Користувач' // Додали підстраховку
       });
@@ -27,6 +27,22 @@ const Comments = ({ comicId, initialComments = [] }) => {
       setError('');
     } catch (err) {
       setError(err.response?.data?.message || 'Сталася помилка при відправці коментаря');
+    }
+  };
+
+  // НОВИЙ ОБРОБНИК ДЛЯ ВИДАЛЕННЯ КОМЕНТАРЯ
+  const deleteHandler = async (commentId) => {
+    if (!window.confirm('Ви впевнені, що хочете видалити цей коментар?')) return;
+
+    try {
+      // Відправляємо запит на видалення конкретного коментаря у цього коміксу
+      await api.delete(`/comics/${comicId}/comments/${commentId}`);
+      
+      // Миттєво оновлюємо інтерфейс, прибираючи видалений коментар із масиву сторінки
+      setComments(prev => prev.filter(comment => comment._id !== commentId));
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Не вдалося видалити коментар');
     }
   };
 
@@ -58,11 +74,36 @@ const Comments = ({ comicId, initialComments = [] }) => {
       {error && <p style={{ color: '#ef4444' }}>{error}</p>}
 
       <div className="comments-list" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        {comments.map((comment, index) => (
-          <div key={index} style={{ backgroundColor: '#1a1a1a', padding: '15px', borderRadius: '8px' }}>
+        {comments.map((comment) => (
+          // Змінили key з index на нормальний id з бази даних — це правильний підхід у React
+          <div key={comment._id} style={{ backgroundColor: '#1a1a1a', padding: '15px', borderRadius: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '0.9rem', color: '#aaa' }}>
               <strong style={{ color: '#fff' }}>{comment.username}</strong>
-              <span>{new Date(comment.createdAt).toLocaleDateString('uk-UA')}</span>
+              
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <span>{new Date(comment.createdAt).toLocaleDateString('uk-UA')}</span>
+                
+                {/* ПЕРЕВІРКА: показувати кнопку видалення лише автору або адміну */}
+                {user && (user._id === comment.user || user.role === 'admin') && (
+                  <button 
+                    onClick={() => deleteHandler(comment._id)}
+                    style={{ 
+                      background: 'none', 
+                      border: 'none', 
+                      color: '#ef4444', 
+                      cursor: 'pointer', 
+                      padding: 0, 
+                      fontSize: '1rem',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    title="Видалити коментар"
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+
             </div>
             <p style={{ margin: 0 }}>{comment.text}</p>
           </div>
