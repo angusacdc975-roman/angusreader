@@ -17,8 +17,12 @@ export default function ComicDetail() {
   const [bookmarked, setBookmarked] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  
+  // Стани для розділів
   const [chapterOpen, setChapterOpen] = useState(false);
+  const [editingChapter, setEditingChapter] = useState(null); // НОВЕ: зберігає розділ для редагування
   const [delChapter, setDelChapter] = useState(null);
+  
   const { user } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
@@ -47,13 +51,14 @@ export default function ComicDetail() {
   };
 
   const handleDeleteChapter = async () => {
-    await api.delete(`/comics/${comic._id}/chapters/${delChapter.number}`);
+    // ЗМІНЕНО: тепер видаляємо за _id, щоб бекенд міг почистити Cloudinary
+    await api.delete(`/comics/${comic._id}/chapters/${delChapter._id}`);
     addToast('Розділ видалено');
     setDelChapter(null);
     load();
   };
 
-const handleRate = async (ratingValue) => {
+  const handleRate = async (ratingValue) => {
     if (!user) {
       addToast('Будь ласка, увійдіть в акаунт, щоб оцінити комікс');
       return;
@@ -103,38 +108,40 @@ const handleRate = async (ratingValue) => {
             {user?.role === 'admin' && (
               <>
                 <button className="btn btn-ghost" onClick={() => setEditOpen(true)}> Редагувати</button>
-                <button className="btn btn-ghost" onClick={() => setChapterOpen(true)}>+ Розділ</button>
+                {/* ЗМІНЕНО: При створенні нового розділу скидаємо editingChapter в null */}
+                <button className="btn btn-ghost" onClick={() => { setEditingChapter(null); setChapterOpen(true); }}>+ Розділ</button>
                 <button className="btn btn-danger" onClick={() => setDeleteOpen(true)}> Видалити</button>
               </>
             )}
           </div>
         </div>
+        
         {/* Інтерактивний рейтинг */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '16px', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px', width: 'fit-content' }}>
-            <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Оцінити комікс:</span>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <span
-                  key={star}
-                  onClick={() => handleRate(star)}
-                  style={{
-                    cursor: 'pointer',
-                    fontSize: '24px',
-                    color: Math.round(comic.rating || 0) >= star ? 'var(--gold)' : 'var(--text-muted)',
-                    transition: 'transform 0.1s'
-                  }}
-                  onMouseDown={e => e.target.style.transform = 'scale(0.8)'}
-                  onMouseUp={e => e.target.style.transform = 'scale(1)'}
-                  title={`Оцінити на ${star}`}
-                >
-                  ★
-                </span>
-              ))}
-            </div>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>
-              (Оцінок: {comic.ratingCount || 0})
-            </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '16px', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px', width: 'fit-content' }}>
+          <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Оцінити комікс:</span>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <span
+                key={star}
+                onClick={() => handleRate(star)}
+                style={{
+                  cursor: 'pointer',
+                  fontSize: '24px',
+                  color: Math.round(comic.rating || 0) >= star ? 'var(--gold)' : 'var(--text-muted)',
+                  transition: 'transform 0.1s'
+                }}
+                onMouseDown={e => e.target.style.transform = 'scale(0.8)'}
+                onMouseUp={e => e.target.style.transform = 'scale(1)'}
+                title={`Оцінити на ${star}`}
+              >
+                ★
+              </span>
+            ))}
           </div>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>
+            (Оцінок: {comic.ratingCount || 0})
+          </span>
+        </div>
       </div>
 
       <div className="section-header">
@@ -145,16 +152,36 @@ const handleRate = async (ratingValue) => {
       ) : (
         <div className="chapters-list">
           {[...comic.chapters].sort((a, b) => b.number - a.number).map(ch => (
-            <div key={ch.number} className="chapter-item">
-              <div onClick={() => navigate(`/read/${comic._id}/${ch.number}`)}>
+            <div key={ch._id} className="chapter-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div 
+                style={{ cursor: 'pointer', flexGrow: 1 }} 
+                onClick={() => navigate(`/read/${comic._id}/${ch.number}`)}
+              >
                 <span className="chapter-num">Розділ {ch.number}</span>
                 {ch.title && <span className="chapter-title" style={{ marginLeft: 12 }}>{ch.title}</span>}
               </div>
+              
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <span className="chapter-date">{new Date(ch.publishedAt).toLocaleDateString('uk-UA')}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>👁 {ch.views}</span>
+                <span className="chapter-date">{new Date(ch.publishedAt || Date.now()).toLocaleDateString('uk-UA')}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 12, marginRight: 10 }}>👁 {ch.views || 0}</span>
+                
                 {user?.role === 'admin' && (
-                  <button className="btn btn-danger btn-sm" onClick={() => setDelChapter(ch)}>🗑️</button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {/* НОВЕ: Кнопка редагування */}
+                    <button 
+                      className="btn btn-ghost btn-sm" 
+                      style={{ padding: '4px 8px', backgroundColor: '#333', borderRadius: '4px' }}
+                      onClick={(e) => { e.stopPropagation(); setEditingChapter(ch); setChapterOpen(true); }}
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      className="btn btn-danger btn-sm" 
+                      onClick={(e) => { e.stopPropagation(); setDelChapter(ch); }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -164,9 +191,20 @@ const handleRate = async (ratingValue) => {
 
       {editOpen && <ComicModal comic={comic} onClose={() => setEditOpen(false)} onSaved={() => { setEditOpen(false); load(); }} />}
       {deleteOpen && <DeleteModal title={comic.title} onClose={() => setDeleteOpen(false)} onConfirm={handleDelete} />}
-      {chapterOpen && <ChapterModal comicId={comic._id} chaptersCount={comic.chapters?.length || 0} onClose={() => setChapterOpen(false)} onSaved={() => { setChapterOpen(false); load(); }} />}
+      
+      {/* ЗМІНЕНО: Тепер ми передаємо об'єкт chapter (для редагування) або null (для створення) */}
+      {chapterOpen && (
+        <ChapterModal 
+          comicId={comic._id} 
+          chapter={editingChapter} 
+          onClose={() => setChapterOpen(false)} 
+          onSaved={() => { setChapterOpen(false); load(); }} 
+        />
+      )}
+      
       {delChapter && <DeleteModal title={`Розділ ${delChapter.number}`} onClose={() => setDelChapter(null)} onConfirm={handleDeleteChapter} />}
-    <div className="section-header" style={{ marginTop: '40px' }}>
+      
+      <div className="section-header" style={{ marginTop: '40px' }}>
         <h2 className="section-title">Обговорення</h2>
       </div>
       <Comments comicId={comic._id} initialComments={comic.comments || []} />

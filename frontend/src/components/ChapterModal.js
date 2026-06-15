@@ -1,66 +1,116 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useToast } from '../context/ToastContext';
 
-export default function ChapterModal({ comicId, chaptersCount, onClose, onSaved }) {
-  const [num, setNum] = useState(chaptersCount + 1);
-  const [title, setTitle] = useState('');
+export default function ChapterModal({ comicId, chapter, onClose, onSaved }) {
+  const { addToast } = useToast();
+  const [form, setForm] = useState({ number: '', title: '' });
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-  const { addToast } = useToast();
 
-  const validate = () => {
-    const e = {};
-    if (!num || num < 1) e.num = 'Номер розділу обов\'язковий';
-    if (files.length === 0) e.files = 'Додайте хоча б одну сторінку';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
+  // Якщо передали існуючий розділ, заповнюємо поля його даними
+  useEffect(() => {
+    if (chapter) {
+      setForm({ number: chapter.number || '', title: chapter.title || '' });
+    }
+  }, [chapter]);
 
-  const handleSubmit = async () => {
-    if (!validate()) return;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (form.number === '') return addToast('Вкажіть номер розділу', 'error');
+    
+    // Якщо створюємо новий розділ, файли обов'язкові. При редагуванні - ні.
+    if (!chapter && files.length === 0) {
+      return addToast('Виберіть хоча б одну сторінку!', 'error');
+    }
+
     setLoading(true);
     try {
       const fd = new FormData();
-      fd.append('number', num);
-      fd.append('title', title);
-      Array.from(files).forEach(f => fd.append('pages', f));
-      await api.post(`/comics/${comicId}/chapters`, fd);
-      addToast('Розділ додано!');
-      onSaved();
+      fd.append('number', form.number);
+      fd.append('title', form.title);
+      
+      // Додаємо всі вибрані файли у FormData під ім'ям 'pages'
+      if (files.length > 0) {
+        Array.from(files).forEach(file => {
+          fd.append('pages', file);
+        });
+      }
+
+      // Відправляємо запит: PUT для редагування, POST для створення
+      if (chapter) {
+        await api.put(`/comics/${comicId}/chapters/${chapter._id}`, fd);
+        addToast('Розділ успішно оновлено!', 'success');
+      } else {
+        await api.post(`/comics/${comicId}/chapters`, fd);
+        addToast('Новий розділ додано!', 'success');
+      }
+      
+      onSaved(); // Оновлюємо сторінку коміксу
+      onClose(); // Закриваємо модалку
     } catch (err) {
-      addToast(err.response?.data?.message || 'Помилка', 'error');
-    } finally { setLoading(false); }
+      addToast(err.response?.data?.message || 'Помилка збереження', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-title">📄 Додати розділ</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: '500px' }}>
+        <div className="modal-title">
+          {chapter ? ' Редагувати розділ' : '➕ Додати розділ'}
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           <div className="form-group">
-            <label className="form-label">Номер *</label>
-            <input className="form-input" type="number" value={num} onChange={e => setNum(e.target.value)} />
-            {errors.num && <div className="form-error">{errors.num}</div>}
+            <label className="form-label">Номер розділу *</label>
+            <input 
+              type="number" 
+              className="form-input" 
+              value={form.number} 
+              onChange={e => setForm({...form, number: e.target.value})} 
+              placeholder="Наприклад: 1" 
+              required 
+            />
           </div>
+
           <div className="form-group">
-            <label className="form-label">Назва (необов'язково)</label>
-            <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Назва розділу..." />
+            <label className="form-label">Назва розділу (необов'язково)</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              value={form.title} 
+              onChange={e => setForm({...form, title: e.target.value})} 
+              placeholder="Наприклад: Початок" 
+            />
           </div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Сторінки (зображення) *</label>
-          <input type="file" multiple accept="image/*" onChange={e => setFiles(e.target.files)} style={{ color: 'var(--text-secondary)', fontSize: 14 }} />
-          {files.length > 0 && <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>Вибрано: {files.length} файлів</div>}
-          {errors.files && <div className="form-error">{errors.files}</div>}
-        </div>
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Скасувати</button>
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
-            {loading ? 'Завантаження...' : 'Додати'}
-          </button>
-        </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              Сторінки (Зображення)
+              {chapter && <span style={{fontSize: '12px', color: '#888', marginLeft: '10px'}}>Залиште порожнім, щоб не змінювати старі</span>}
+            </label>
+            <input 
+              type="file" 
+              multiple // Дозволяємо вибирати багато файлів
+              accept="image/*"
+              className="form-input" 
+              onChange={(e) => setFiles(e.target.files)} 
+            />
+            {files.length > 0 && <small style={{color: '#4ade80'}}>{files.length} файлів вибрано</small>}
+          </div>
+
+          <div className="modal-actions" style={{ marginTop: '20px' }}>
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={loading}>
+              Скасувати
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Збереження...' : (chapter ? 'Оновити' : 'Створити')}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
