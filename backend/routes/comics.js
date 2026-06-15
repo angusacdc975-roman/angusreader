@@ -245,28 +245,38 @@ router.post('/:id/comments', auth, async (req, res) => {
 module.exports = router;
 
 // DELETE видалення коментаря
-// Зверни увагу: ми використовуємо middleware auth, щоб знати, хто робить запит
-router.delete('/comments/:commentId', auth, async (req, res) => {
+router.delete('/:id/comments/:commentId', auth, async (req, res) => {
   try {
-    // 1. Знаходимо коментар у базі
-    const comment = await Comment.findById(req.params.commentId);
-    
-    if (!comment) {
+    // 1. Знаходимо комікс
+    const comic = await Comic.findById(req.params.id);
+    if (!comic) {
+      return res.status(404).json({ message: 'Комікс не знайдено' });
+    }
+
+    // 2. Шукаємо індекс коментаря в масиві
+    const commentIndex = comic.comments.findIndex(
+      c => c._id.toString() === req.params.commentId
+    );
+
+    if (commentIndex === -1) {
       return res.status(404).json({ message: 'Коментар не знайдено' });
     }
 
-    // 2. ПЕРЕВІРКА БЕЗПЕКИ: чи належить коментар цьому юзеру?
-    // req.user._id береться з твого токена (middleware auth)
-    // toString() потрібен, бо в MongoDB ID - це об'єкти, а не просто текст
-    if (comment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+    const comment = comic.comments[commentIndex];
+
+    // 3. ПЕРЕВІРКА БЕЗПЕКИ: чи це автор коментаря АБО адмін?
+    // Захист від того, щоб хтось не видалив чуже через код
+    if (comment.user && comment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Ви не можете видалити чужий коментар' });
     }
 
-    // 3. Якщо перевірка пройдена - видаляємо
-    await comment.deleteOne();
-    
+    // 4. Видаляємо коментар з масиву
+    comic.comments.splice(commentIndex, 1);
+    await comic.save();
+
     res.json({ message: 'Коментар успішно видалено' });
   } catch (err) {
+    // Якщо щось піде не так, тепер ми ТОЧНО побачимо це в логах
     console.error("ПОМИЛКА ВИДАЛЕННЯ КОМЕНТАРЯ:", err);
     res.status(500).json({ message: err.message });
   }
